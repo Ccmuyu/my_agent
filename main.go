@@ -20,7 +20,7 @@ import (
 
 // ================= 配置区域 =================
 const (
-	ZHIPU_API_KEY = "34a2e4fbcd0d4ad3af5a0a9b54dc3e1f.HkRxvndaEepC8ga7" // ⚠️请替换
+	ZHIPU_API_KEY = "" // ⚠️请替换
 	BASE_URL      = "https://open.bigmodel.cn/api/paas/v4/"
 	MODEL_NAME    = "glm-4-flash"
 	SKILLS_DIR    = "./skills"
@@ -115,7 +115,7 @@ func GetToolsForLLM() []openai.Tool {
 	for _, skill := range skillRegistry {
 		paramJSON, _ := json.Marshal(skill.Meta.Parameters)
 		fullDesc := fmt.Sprintf("%s\n\nInstructions:\n%s", skill.Meta.Description, skill.Prompt)
-		
+
 		tools = append(tools, openai.Tool{
 			Type: openai.ToolTypeFunction,
 			Function: &openai.FunctionDefinition{
@@ -134,7 +134,7 @@ func doTranslate(args map[string]interface{}) (string, error) {
 	if !ok {
 		return "", fmt.Errorf("missing text argument")
 	}
-	
+
 	targetLang, ok := args["target_lang"].(string)
 	if !ok {
 		return "", fmt.Errorf("missing target_lang argument")
@@ -179,6 +179,132 @@ func doTranslate(args map[string]interface{}) (string, error) {
 	return fmt.Sprintf("API Error: %s", string(body)), nil
 }
 
+// doWeather 内部实现的天气查询逻辑
+func doWeather(args map[string]interface{}) (string, error) {
+	city, _ := args["city"].(string)
+
+	if city == "" {
+		// 通过多个 IP 定位服务获取城市，提高准确性
+		ipServices := []string{
+			"https://ipapi.co/json/",
+			"https://ipinfo.io/json",
+		}
+
+		for _, ipURL := range ipServices {
+			ipResp, err := http.Get(ipURL)
+			if err != nil {
+				continue
+			}
+
+			var ipResult map[string]interface{}
+			if err := json.NewDecoder(ipResp.Body).Decode(&ipResult); err != nil {
+				ipResp.Body.Close()
+				continue
+			}
+			ipResp.Body.Close()
+
+			city, _ = ipResult["city"].(string)
+			if city != "" {
+				break
+			}
+		}
+
+		if city == "" {
+			city = "Beijing"
+		}
+	}
+
+	// 使用 wttr.in 公共 API 查询天气，添加重试机制
+	var weatherResult map[string]interface{}
+	var lastErr error
+
+	for attempt := 0; attempt < 3; attempt++ {
+		apiURL := fmt.Sprintf("https://wttr.in/%s?format=j1", url.QueryEscape(city))
+		resp, err := http.Get(apiURL)
+		if err != nil {
+			lastErr = err
+			time.Sleep(500 * time.Millisecond)
+			continue
+		}
+
+		if err := json.NewDecoder(resp.Body).Decode(&weatherResult); err != nil {
+			resp.Body.Close()
+			lastErr = err
+			time.Sleep(500 * time.Millisecond)
+			continue
+		}
+		resp.Body.Close()
+
+		if weatherResult != nil {
+			break
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+
+	if weatherResult == nil {
+		if lastErr != nil {
+			return fmt.Sprintf("❌ 天气查询失败: %v\n🌍 建议: 请提供具体城市名称，例如 'weather(city: \"北京\")'", lastErr), nil
+		}
+		return "❌ 无法获取天气数据\n🌍 建议: 请提供具体城市名称，例如 'weather(city: \"北京\")'", nil
+	}
+
+	// 提取天气信息
+	current, ok := weatherResult["current_condition"].([]interface{})
+	if !ok || len(current) == 0 {
+		return "❌ 天气数据格式错误\n🌍 建议: 请提供具体城市名称，例如 'weather(city: \"北京\")'", nil
+	}
+
+	c, ok := current[0].(map[string]interface{})
+	if !ok {
+		return "❌ 天气数据解析失败\n🌍 建议: 请提供具体城市名称，例如 'weather(city: \"北京\")'", nil
+	}
+
+	temp, _ := c["temp_C"].(string)
+	feelsLike, _ := c["FeelsLikeC"].(string)
+	humidity, _ := c["humidity"].(string)
+	windSpeed, _ := c["windspeedKmph"].(string)
+	windDir, _ := c["winddir16Point"].(string)
+
+	// 解析天气描述
+	weatherDesc := "未知"
+	if weatherDescs, ok := c["weatherDesc"].([]interface{}); ok && len(weatherDescs) > 0 {
+		if desc, ok := weatherDescs[0].(map[string]interface{}); ok {
+			if value, ok := desc["value"].(string); ok {
+				weatherDesc = value
+			}
+		}
+	}
+
+	// 检查是否有明天的天气数据
+	forecast, hasForecast := weatherResult["weather"].([]interface{})
+	tomorrow := ""
+	if hasForecast && len(forecast) > 1 {
+		if day2, ok := forecast[1].(map[string]interface{}); ok {
+			if dayDesc, ok := day2["weatherDesc"].([]interface{}); ok && len(dayDesc) > 0 {
+				if desc, ok := dayDesc[0].(map[string]interface{}); ok {
+					if value, ok := desc["value"].(string); ok {
+						tomorrow = value
+					}
+				}
+			}
+			if maxTemp, ok := day2["maxtempC"].(string); ok {
+				if minTemp, ok := day2["mintempC"].(string); ok {
+					tomorrow = fmt.Sprintf("明天: %s，温度 %s~%s°C", tomorrow, minTemp, maxTemp)
+				}
+			}
+		}
+	}
+
+	result := fmt.Sprintf("📍 %s 天气\n🌡️ 温度: %s°C (体感 %s°C)\n🌤️ 天气: %s\n💧 湿度: %s%%\n💨 风速: %s km/h %s",
+		city, temp, feelsLike, weatherDesc, humidity, windSpeed, windDir)
+
+	if tomorrow != "" {
+		result += "\n" + tomorrow
+	}
+
+	return result, nil
+}
+
 func ExecuteSkill(name string, args map[string]interface{}) (string, error) {
 	// 1. 内部特殊技能：重载
 	if name == "reload_skills" {
@@ -186,14 +312,14 @@ func ExecuteSkill(name string, args map[string]interface{}) (string, error) {
 		if err != nil {
 			return fmt.Sprintf("Failed to reload skills: %v", err), nil
 		}
-		
+
 		skillMutex.RLock()
 		var skillList []string
 		for k := range skillRegistry {
 			skillList = append(skillList, k)
 		}
 		skillMutex.RUnlock()
-		
+
 		return fmt.Sprintf("✅ Skills reloaded successfully. Available skills: %s", strings.Join(skillList, ", ")), nil
 	}
 
@@ -202,7 +328,12 @@ func ExecuteSkill(name string, args map[string]interface{}) (string, error) {
 		return doTranslate(args)
 	}
 
-	// 3. 常规技能检查
+	// 3. 内部特殊技能：天气查询
+	if name == "weather" {
+		return doWeather(args)
+	}
+
+	// 4. 常规技能检查
 	skillMutex.RLock()
 	_, exists := skillRegistry[name]
 	skillMutex.RUnlock()
@@ -241,14 +372,14 @@ func ExecuteSkill(name string, args map[string]interface{}) (string, error) {
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, baseCmd, parts[1:]...)
-	
+
 	if path, ok := args["path"].(string); ok && path != "" {
 		cmd.Dir = path
 	}
 
 	output, err := cmd.CombinedOutput()
 	result := string(output)
-	
+
 	if err != nil {
 		return fmt.Sprintf("⚠️ Execution Error: %v\nOutput:\n%s", err, result), nil
 	}
@@ -264,7 +395,7 @@ func ExecuteSkill(name string, args map[string]interface{}) (string, error) {
 
 func main() {
 	fmt.Println("🔍 Initializing Agent...")
-	
+
 	if err := LoadSkillsFromDir(SKILLS_DIR); err != nil {
 		log.Fatalf("Failed to load initial skills: %v", err)
 	}
@@ -286,14 +417,18 @@ IMPORTANT RULES:
 	}
 
 	fmt.Println("\n🚀 Dynamic Skill Agent Started")
-	fmt.Println("Type 'quit' to exit.\n")
+	fmt.Println("Type 'quit' to exit.")
 
 	for {
 		fmt.Print("👤 User: ")
 		var input string
 		fmt.Scanln(&input)
-		if strings.ToLower(input) == "quit" { break }
-		if input == "" { continue }
+		if strings.ToLower(input) == "quit" {
+			break
+		}
+		if input == "" {
+			continue
+		}
 
 		messages = append(messages, openai.ChatCompletionMessage{
 			Role: openai.ChatMessageRoleUser, Content: input,
@@ -330,7 +465,7 @@ IMPORTANT RULES:
 			for _, tc := range msg.ToolCalls {
 				var funcArgs map[string]interface{}
 				json.Unmarshal([]byte(tc.Function.Arguments), &funcArgs)
-				
+
 				result, err := ExecuteSkill(tc.Function.Name, funcArgs)
 				if err != nil {
 					result = fmt.Sprintf("System Error: %v", err)
@@ -346,4 +481,3 @@ IMPORTANT RULES:
 		}
 	}
 }
-
