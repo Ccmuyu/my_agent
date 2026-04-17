@@ -1,9 +1,10 @@
 # Dynamic Skill Agent
 
-一个基于 Go 语言和智谱 AI 的动态技能 Agent，支持多种实用技能如天气查询、翻译、系统信息等。
+一个基于 Go 语言和多种大模型 API 的动态技能 Agent，支持多种实用技能如天气查询、翻译、系统信息等。
 
 ## ✨ 功能特性
 
+- **多 Provider 支持**：支持智谱AI、阿里云百炼、火山引擎豆包、讯飞星火等多种大模型
 - **动态技能管理**：自动加载 `skills` 目录下的技能定义
 - **天气查询**：支持自动 IP 定位和手动指定城市，提供当前和未来天气
 - **翻译功能**：支持多语言互译
@@ -15,7 +16,6 @@
 
 ### 环境要求
 - Go 1.18+
-- 智谱 AI API Key（用于 LLM 调用）
 
 ### 安装
 
@@ -25,24 +25,52 @@ cd dynamic-skill-agent
 go mod tidy
 ```
 
-### 配置
-
-编辑 `main.go` 文件，设置你的智谱 AI API Key：
-
-```go
-const (
-	ZHIPU_API_KEY = "your-api-key-here" // 替换为你的 API Key
-	BASE_URL      = "https://open.bigmodel.cn/api/paas/v4/"
-	MODEL_NAME    = "glm-4-flash"
-	SKILLS_DIR    = "./skills"
-)
-```
-
 ### 运行
 
 ```bash
-go run main.go
+# 默认使用智谱AI（需要设置 API Key）
+go run main.go -provider=zhipu -api-key=YOUR_ZHIPU_API_KEY
+
+# 使用阿里云百炼
+go run main.go -provider=qwen -api-key=YOUR_QWEN_API_KEY
+
+# 使用火山引擎豆包
+go run main.go -provider=doubao -api-key=YOUR_DOUBAO_API_KEY
+
+# 使用讯飞星火
+go run main.go -provider=spark -api-key=YOUR_SPARK_API_KEY
 ```
+
+## 📡 支持的大模型 Provider
+
+| Provider | 提供商 | 默认模型 | 免费额度 | Base URL |
+|----------|--------|----------|----------|----------|
+| `zhipu` | 智谱AI | glm-4-flash | 2000万 Tokens（永久） | https://open.bigmodel.cn/api/paas/v4/ |
+| `qwen` | 阿里云百炼 | qwen-plus | 100万 Tokens/模型（90天），Qwen-Turbo 每月100万（永久） | https://dashscope.aliyuncs.com/compatible-mode/v1 |
+| `doubao` | 火山引擎豆包 | Doubao-Seed-2.0-lite | 5000万 Tokens（永久） | https://ark.cn-beijing.volces.com/api/v3 |
+| `spark` | 讯飞星火 | spark-lite | 星火Lite 永久免费 | https://spark-api.xf-yun.com/v3.1/chat |
+
+### 获取 API Key
+
+**智谱AI**：
+1. 访问 [智谱AI开放平台](https://open.bigmodel.cn/)
+2. 注册并完成实名认证
+3. 在控制台创建 API Key
+
+**阿里云百炼**：
+1. 访问 [阿里云百炼平台](https://bailian.console.aliyun.com/)
+2. 注册并完成实名认证
+3. 开通大模型服务并创建 API Key
+
+**火山引擎豆包**：
+1. 访问 [火山方舟](https://www.volcengine.com/product/ark)
+2. 注册并完成实名认证
+3. 创建推理接入点并获取 API Key
+
+**讯飞星火**：
+1. 访问 [讯飞开放平台](https://www.xfyun.cn/)
+2. 注册并完成实名认证
+3. 在控制台创建应用并获取 APPID、APIKey、APISecret
 
 ## 📚 技能列表
 
@@ -97,13 +125,6 @@ go run main.go
 🛠️  Calling: [git_operations]
 ✅ Assistant: On branch main
 Your branch is up to date with 'origin/main'.
-
-Changes not staged for commit:
-  (use "git add <file>..." to update what will be committed)
-  (use "git restore <file>..." to discard changes in working directory)
-	modified:   main.go
-
-no changes added to commit (use "git add" and/or "git commit -a")
 ```
 
 ## 🔧 自定义技能
@@ -148,11 +169,10 @@ if name == "example" {
 
 4. 运行 `reload_skills()` 重载技能
 
-## 📡 API 依赖
+## 📡 外部 API 依赖
 
 | 服务 | 用途 | 来源 |
 |------|------|------|
-| 智谱 AI | LLM 调用 | https://open.bigmodel.cn/ |
 | wttr.in | 天气查询 | https://wttr.in/ |
 | ipapi.co | IP 定位 | https://ipapi.co/ |
 | ipinfo.io | IP 定位 | https://ipinfo.io/ |
@@ -175,5 +195,5 @@ MIT License - 详见 [LICENSE](LICENSE) 文件
 ---
 
 **作者**：Your Name
-**版本**：1.0.0
+**版本**：2.0.0
 **最后更新**：2026-04-18

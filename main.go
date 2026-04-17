@@ -3,11 +3,13 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -20,14 +22,55 @@ import (
 
 // ================= 配置区域 =================
 const (
-	ZHIPU_API_KEY = "" // ⚠️请替换
-	BASE_URL      = "https://open.bigmodel.cn/api/paas/v4/"
-	MODEL_NAME    = "glm-4-flash"
-	SKILLS_DIR    = "./skills"
+	SKILLS_DIR = "./skills"
 )
 
-// ================= 数据结构 =================
+// ================= Provider 配置 =================
+type ProviderConfig struct {
+	Name    string
+	APIKey  string
+	BaseURL string
+	Model   string
+}
 
+var (
+	providers = map[string]ProviderConfig{
+		"zhipu": {
+			Name:    "智谱AI",
+			APIKey:  "",
+			BaseURL: "https://open.bigmodel.cn/api/paas/v4/",
+			Model:   "glm-4-flash",
+		},
+		"qwen": {
+			Name:    "阿里云百炼",
+			APIKey:  "",
+			BaseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+			Model:   "qwen-turbo",
+		},
+		"doubao": {
+			Name:    "火山引擎豆包",
+			APIKey:  "",
+			BaseURL: "https://ark.cn-beijing.volces.com/api/v3",
+			Model:   "Doubao-Seed-2.0-lite",
+		},
+		"spark": {
+			Name:    "讯飞星火",
+			APIKey:  "",
+			BaseURL: "https://spark-api.xf-yun.com/v3.1/chat",
+			Model:   "spark-lite",
+		},
+	}
+
+	currentProvider string
+	apiKey          string
+)
+
+func init() {
+	flag.StringVar(&currentProvider, "provider", "zhipu", "LLM provider: zhipu, qwen, doubao, spark")
+	flag.StringVar(&apiKey, "api-key", "", "API Key for the selected provider")
+}
+
+// ================= 数据结构 =================
 type SkillMeta struct {
 	Name        string                 `yaml:"name"`
 	Description string                 `yaml:"description"`
@@ -145,7 +188,6 @@ func doTranslate(args map[string]interface{}) (string, error) {
 		sourceLang = "Auto"
 	}
 
-	// 使用 MyMemory Free API
 	baseURL := "https://api.mymemory.translated.net/get"
 	params := url.Values{}
 	params.Add("q", text)
@@ -164,7 +206,6 @@ func doTranslate(args map[string]interface{}) (string, error) {
 		return "", err
 	}
 
-	// 解析 JSON
 	var result map[string]interface{}
 	if err := json.Unmarshal(body, &result); err != nil {
 		return "", err
@@ -184,7 +225,6 @@ func doWeather(args map[string]interface{}) (string, error) {
 	city, _ := args["city"].(string)
 
 	if city == "" {
-		// 通过多个 IP 定位服务获取城市，提高准确性
 		ipServices := []string{
 			"https://ipapi.co/json/",
 			"https://ipinfo.io/json",
@@ -214,7 +254,6 @@ func doWeather(args map[string]interface{}) (string, error) {
 		}
 	}
 
-	// 使用 wttr.in 公共 API 查询天气，添加重试机制
 	var weatherResult map[string]interface{}
 	var lastErr error
 
@@ -248,7 +287,6 @@ func doWeather(args map[string]interface{}) (string, error) {
 		return "❌ 无法获取天气数据\n🌍 建议: 请提供具体城市名称，例如 'weather(city: \"北京\")'", nil
 	}
 
-	// 提取天气信息
 	current, ok := weatherResult["current_condition"].([]interface{})
 	if !ok || len(current) == 0 {
 		return "❌ 天气数据格式错误\n🌍 建议: 请提供具体城市名称，例如 'weather(city: \"北京\")'", nil
@@ -265,7 +303,6 @@ func doWeather(args map[string]interface{}) (string, error) {
 	windSpeed, _ := c["windspeedKmph"].(string)
 	windDir, _ := c["winddir16Point"].(string)
 
-	// 解析天气描述
 	weatherDesc := "未知"
 	if weatherDescs, ok := c["weatherDesc"].([]interface{}); ok && len(weatherDescs) > 0 {
 		if desc, ok := weatherDescs[0].(map[string]interface{}); ok {
@@ -275,7 +312,6 @@ func doWeather(args map[string]interface{}) (string, error) {
 		}
 	}
 
-	// 检查是否有明天的天气数据
 	forecast, hasForecast := weatherResult["weather"].([]interface{})
 	tomorrow := ""
 	if hasForecast && len(forecast) > 1 {
@@ -306,7 +342,6 @@ func doWeather(args map[string]interface{}) (string, error) {
 }
 
 func ExecuteSkill(name string, args map[string]interface{}) (string, error) {
-	// 1. 内部特殊技能：重载
 	if name == "reload_skills" {
 		err := LoadSkillsFromDir(SKILLS_DIR)
 		if err != nil {
@@ -323,17 +358,14 @@ func ExecuteSkill(name string, args map[string]interface{}) (string, error) {
 		return fmt.Sprintf("✅ Skills reloaded successfully. Available skills: %s", strings.Join(skillList, ", ")), nil
 	}
 
-	// 2. 内部特殊技能：翻译
 	if name == "translate_text" {
 		return doTranslate(args)
 	}
 
-	// 3. 内部特殊技能：天气查询
 	if name == "weather" {
 		return doWeather(args)
 	}
 
-	// 4. 常规技能检查
 	skillMutex.RLock()
 	_, exists := skillRegistry[name]
 	skillMutex.RUnlock()
@@ -342,13 +374,11 @@ func ExecuteSkill(name string, args map[string]interface{}) (string, error) {
 		return "", fmt.Errorf("skill not found: %s", name)
 	}
 
-	// 4. 通用 Shell 执行逻辑
 	cmdStr, ok := args["command"].(string)
 	if !ok || cmdStr == "" {
 		return "", fmt.Errorf("missing 'command' argument for skill '%s'", name)
 	}
 
-	// 5. 安全白名单
 	allowedBaseCommands := map[string]bool{
 		"git": true, "ls": true, "pwd": true, "cat": true,
 		"head": true, "tail": true, "grep": true, "find": true,
@@ -367,7 +397,6 @@ func ExecuteSkill(name string, args map[string]interface{}) (string, error) {
 		return "", fmt.Errorf("🚫 Security Block: Command '%s' is not allowed.", baseCmd)
 	}
 
-	// 6. 执行
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -394,29 +423,45 @@ func ExecuteSkill(name string, args map[string]interface{}) (string, error) {
 // ================= 主程序 =================
 
 func main() {
-	fmt.Println("🔍 Initializing Agent...")
+	flag.Parse()
+
+	provider, ok := providers[currentProvider]
+	if !ok {
+		fmt.Printf("❌ Unknown provider: %s\n", currentProvider)
+		fmt.Println("Available providers: zhipu, qwen, doubao, spark")
+		os.Exit(1)
+	}
+
+	if apiKey == "" {
+		fmt.Printf("❌ API key is required for provider '%s'\n", currentProvider)
+		fmt.Printf("Usage: go run main.go -provider=%s -api-key=YOUR_API_KEY\n", currentProvider)
+		os.Exit(1)
+	}
+
+	provider.APIKey = apiKey
+
+	fmt.Printf("🔍 Initializing Agent with %s (%s)...\n", provider.Name, provider.Model)
 
 	if err := LoadSkillsFromDir(SKILLS_DIR); err != nil {
 		log.Fatalf("Failed to load initial skills: %v", err)
 	}
 
-	config := openai.DefaultConfig(ZHIPU_API_KEY)
-	config.BaseURL = BASE_URL
+	config := openai.DefaultConfig(provider.APIKey)
+	config.BaseURL = provider.BaseURL
 	client := openai.NewClientWithConfig(config)
 
-	// ✅ 优化后的 System Prompt，强调不要拆分任务
 	messages := []openai.ChatCompletionMessage{
 		{
 			Role: openai.ChatMessageRoleSystem,
-			Content: `You are a helpful assistant with dynamic skills. 
+			Content: `You are a helpful assistant with dynamic skills.
 IMPORTANT RULES:
-1. If the user provides a phrase or sentence (especially in quotes like 'Hello World'), treat it as a SINGLE unit. 
+1. If the user provides a phrase or sentence (especially in quotes like 'Hello World'), treat it as a SINGLE unit.
 2. DO NOT split the text into multiple tool calls. Call 'translate_text' ONCE with the full text.
 3. Use 'reload_skills' if new skills are added.`,
 		},
 	}
 
-	fmt.Println("\n🚀 Dynamic Skill Agent Started")
+	fmt.Printf("\n🚀 Dynamic Skill Agent Started (%s)\n", provider.Name)
 	fmt.Println("Type 'quit' to exit.")
 
 	for {
@@ -437,8 +482,13 @@ IMPORTANT RULES:
 		fmt.Println("🔄 Thinking...")
 
 		for step := 0; step < 5; step++ {
+			modelName := provider.Model
+			if currentProvider == "qwen" {
+				modelName = "qwen-plus"
+			}
+
 			resp, err := client.CreateChatCompletion(context.Background(), openai.ChatCompletionRequest{
-				Model:    MODEL_NAME,
+				Model:    modelName,
 				Messages: messages,
 				Tools:    GetToolsForLLM(),
 			})
