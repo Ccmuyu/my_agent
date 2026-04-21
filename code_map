@@ -1,0 +1,25 @@
+/cmd
+  /agent-server
+    main.go          # 入口，启动 HTTP/Websocket 服务
+/internal
+  /agent
+    engine.go        # 核心 ReAct 引擎
+    memory.go        # 记忆管理 (Redis/Vector)
+    planner.go       # 提示词构建与解析
+  /skills
+    loader.go        # 加载 .md 文件
+    registry.go      # 技能注册表
+    executors.go     # 具体执行器 (Shell, HTTP, DB)
+  /config
+    config.go        # 配置加载
+/pkg
+  /llm
+    client.go        # LLM 客户端封装
+  /vector
+    store.go         # 向量数据库封装
+/skills              # 技能定义目录
+  git_ops.md
+  db_query.md
+  web_search.md
+/config.yaml         # 全局配置
+

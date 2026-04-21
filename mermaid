@@ -1,0 +1,31 @@
+graph TD
+    User[用户/前端] --> API[API Gateway / Load Balancer]
+    
+    subgraph "Core Agent Engine (Go)"
+        API --> Orchestrator[Orchestrator 编排层]
+        Orchestrator --> Memory[Memory 记忆管理]
+        Orchestrator --> Planner[Planner 规划层]
+        Planner --> Router[Tool Router 路由层]
+    end
+    
+    subgraph "Skill Registry (Dynamic)"
+        Router --> SkillLoader[Skill Loader]
+        SkillLoader --> MD_Files[*.md Skill Definitions]
+        SkillLoader --> Code_Bindings[Go Bindings]
+    end
+    
+    subgraph "Execution Sandbox"
+        Router --> SafeShell[Safe Shell Executor]
+        Router --> HTTP_Client[HTTP Client]
+        Router --> DB_Connector[DB Connector]
+    end
+    
+    subgraph "External World"
+        SafeShell --> Git/Linux
+        HTTP_Client --> APIs/Web
+        DB_Connector --> MySQL/Redis
+    end
+    
+    Memory --> VectorDB[(Vector DB)]
+    Memory --> Redis[(Session Cache)]
+
