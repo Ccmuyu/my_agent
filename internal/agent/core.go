@@ -3,6 +3,7 @@ package agent
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -342,53 +343,33 @@ func (a *DesktopAgent) executeSkill(action Action) ActionResult {
 func parseActions(response string) ([]Action, string, error) {
 	response = strings.TrimSpace(response)
 
+	response = strings.ReplaceAll(response, "'", "\"")
+
 	var actions []Action
 
-	if strings.HasPrefix(response, "[") {
-		end := strings.LastIndex(response, "]")
-		if end == -1 {
-			return nil, response, nil
+	re := regexp.MustCompile(`\{[^{}]*\}`)
+	matches := re.FindAllString(response, -1)
+
+	for _, match := range matches {
+		match = strings.TrimSpace(match)
+		if match == "" || match == "{}" {
+			continue
 		}
-		jsonStr := response[:end+1]
-		if err := json.Unmarshal([]byte(jsonStr), &actions); err != nil {
-			// 尝试逐行解析
-			lines := strings.Split(response, "\n")
-			for _, line := range lines {
-				line = strings.TrimSpace(line)
-				if line == "" || line == "[" || line == "]" || line == "," {
-					continue
-				}
-				var action Action
-				if err := json.Unmarshal([]byte(line), &action); err == nil && (action.Skill != "" || action.Tool != "") {
-					actions = append(actions, action)
-				}
-			}
-		}
-	} else if strings.HasPrefix(response, "{") {
 		var action Action
-		if err := json.Unmarshal([]byte(response), &action); err == nil && (action.Skill != "" || action.Tool != "") {
-			actions = []Action{action}
+		if err := json.Unmarshal([]byte(match), &action); err == nil && (action.Skill != "" || action.Tool != "") {
+			if action.Skill == "weather" && action.Args != nil {
+				if city, ok := action.Args["city"].(string); ok {
+					if strings.Contains(city, "location") || city == "" {
+						action.Args["city"] = ""
+					}
+				}
+			}
+			actions = append(actions, action)
 		}
-	} else {
-		// 尝试从任意位置提取JSON
-		lines := strings.Split(response, "\n")
-		for _, line := range lines {
-			line = strings.TrimSpace(line)
-			if line == "" {
-				continue
-			}
-			// 去掉 "weather" 等工具名前缀
-			if strings.HasPrefix(line, "weather") || strings.HasPrefix(line, "translate") {
-				line = strings.TrimPrefix(line, "weather")
-				line = strings.TrimPrefix(line, "translate")
-				line = strings.TrimPrefix(line, "translate_text")
-				line = strings.TrimSpace(line)
-			}
-			var action Action
-			if err := json.Unmarshal([]byte(line), &action); err == nil && (action.Skill != "" || action.Tool != "") {
-				actions = append(actions, action)
-			}
-		}
+	}
+
+	if len(actions) == 0 {
+		return nil, response, nil
 	}
 
 	return actions, "", nil
