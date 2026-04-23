@@ -96,7 +96,5 @@ func CreateRegistry() *ToolRegistry {
 	r.Register("browser_screenshot", browserScreenshot, "网页截图", 1)
 	r.Register("browser_close", browserClose, "关闭浏览器", 1)
 
-	r.Register("weather", weatherQuery, "查询天气", 1)
-
 	return r
 }

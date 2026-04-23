@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-func weatherQuery(params map[string]any) (any, error) {
+func WeatherQuery(params map[string]any) (any, error) {
 	city := ""
 	if c, ok := params["city"].(string); ok && c != "" {
 		city = c
@@ -31,12 +31,12 @@ func weatherQuery(params map[string]any) (any, error) {
 
 	var data struct {
 		CurrentCondition []struct {
-			TempC      string `json:"temp_C"`
-			WeatherCode string `json:"weatherCode"`
-			Humidity   string `json:"humidity"`
+			TempC         string `json:"temp_C"`
+			WeatherCode  string `json:"weatherCode"`
+			Humidity     string `json:"humidity"`
 			WindspeedKmph string `json:"windspeedKmph"`
-			Winddir   string `json:"winddir"`
-			FeelsLikeC string `json:"FeelsLikeC"`
+			Winddir      string `json:"winddir"`
+			FeelsLikeC   string `json:"FeelsLikeC"`
 		} `json:"current_condition"`
 	}
 

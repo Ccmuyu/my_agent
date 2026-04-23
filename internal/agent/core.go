@@ -11,24 +11,22 @@ import (
 	"github.com/Ccmuyu/my_agent/internal/tools"
 )
 
-const systemPrompt = `你是一个智能助手。
+const systemPrompt = `你是一个智能助手，会根据用户问题调用相应的技能来处理。
 
-重要：
-1. 必须使用工具获取实时信息（天气等）
-2. 必须返回纯JSON数组，不能有任何其他内容
-3. 格式必须严格是JSON数组 [{"tool": "xxx", "params": {...}, "risk_score": N}]
+可用的技能：
+- weather: 查询天气
+- translate_text: 翻译文本
+- system_info: 查看系统信息
+- git_operations: Git操作
 
-可用的工具：
-- weather: 查询天气，params: {"city": "城市名"}，不传city则自动定位
-- file_read: params: {"path": "文件路径"}
-- file_list: params: {"path": "目录路径"}
-...
+调用格式（严格JSON）：
+[{"skill": "weather", "args": {"city": "北京"}}]
 
 示例：
-[{"tool": "weather", "params": {}, "risk_score": 0}]
-[{"tool": "weather", "params": {"city": "杭州"}, "risk_score": 0}]
+[{"skill": "weather", "args": {}}]
+[{"skill": "translate_text", "args": {"text": "hello", "target_lang": "zh"}}]
 
-只输出纯JSON数组，禁止任何解释或换行。`
+只输出JSON数组，禁止任何其他内容。`
 
 type DesktopAgent struct {
 	llm     llm.Client
@@ -156,9 +154,16 @@ func (a *DesktopAgent) streamExecuteTask(taskID string, confirmed bool, onChunk 
 
 	for i, action := range actions {
 		task.CurrentAction = i
-		onChunk(fmt.Sprintf("🛠️ [%d/%d] 执行: %s\n", i+1, len(actions), action.Tool))
 
-		result := a.executeAction(action)
+		// 调用工具或技能
+		var result ActionResult
+		if action.Skill != "" {
+			onChunk(fmt.Sprintf("🛠️ Calling: [%s]\n", action.Skill))
+			result = a.executeSkill(action)
+		} else if action.Tool != "" {
+			onChunk(fmt.Sprintf("🛠️ 执行: %s\n", action.Tool))
+			result = a.executeAction(action)
+		}
 		task.Result = append(task.Result, result)
 
 		if result.Success {
@@ -315,6 +320,22 @@ func (a *DesktopAgent) executeAction(action Action) ActionResult {
 		Success:    false,
 		Error:      "max retries reached",
 		ActionIndex: action.Retry,
+	}
+}
+
+func (a *DesktopAgent) executeSkill(action Action) ActionResult {
+	skillName := action.Skill
+	args := action.Args
+
+	switch skillName {
+	case "weather":
+		result, err := tools.WeatherQuery(args)
+		if err != nil {
+			return ActionResult{Success: false, Error: err.Error()}
+		}
+		return ActionResult{Success: true, Output: result}
+	default:
+		return ActionResult{Success: false, Error: "unknown skill: " + skillName}
 	}
 }
 

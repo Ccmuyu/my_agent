@@ -32,10 +32,12 @@ type Task struct {
 }
 
 type Action struct {
-	Tool      string         `json:"tool"`
-	Params    map[string]any `json:"params"`
-	Retry     int           `json:"retry"`
-	RiskScore int           `json:"risk_score"`
+	Tool      string         `json:"tool,omitempty"`
+	Params    map[string]any `json:"params,omitempty"`
+	Skill    string       `json:"skill,omitempty"`
+	Args     map[string]any `json:"args,omitempty"`
+	Retry    int           `json:"retry"`
+	RiskScore int          `json:"risk_score"`
 }
 
 type ActionResult struct {
