@@ -21,6 +21,7 @@ type Task struct {
 	ID            string      `json:"task_id"`
 	Intent        string      `json:"intent"`
 	Status        TaskStatus  `json:"status"`
+	Thinking      string      `json:"thinking,omitempty"`
 	Actions       []Action    `json:"actions"`
 	CurrentAction int         `json:"current_action"`
 	Result        []ActionResult `json:"result"`

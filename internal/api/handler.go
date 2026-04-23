@@ -29,6 +29,7 @@ func Run(a *agent.DesktopAgent, host string, port int) {
 	r.GET("/api/screen/ocr", screenOCR)
 	r.GET("/api/history", getHistory)
 	r.GET("/health", health)
+	r.POST("/api/tasks/stream", streamCreateTask)
 
 	addr := fmt.Sprintf("%s:%d", host, port)
 	fmt.Printf("启动Web服务: http://%s\n", addr)
@@ -191,4 +192,25 @@ func cancelTask(c *gin.Context) {
 func getHistory(c *gin.Context) {
 	history := desktopAgent.GetToolHistory()
 	c.JSON(http.StatusOK, history)
+}
+
+func streamCreateTask(c *gin.Context) {
+	var req TaskRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.Header("Content-Type", "text/event-stream")
+	c.Header("Cache-Control", "no-cache")
+	c.Header("Connection", "keep-alive")
+	c.Header("Transfer-Encoding", "chunked")
+
+	task := desktopAgent.StreamCreateTask(req.Intent, req.Confirm, func(chunk string) {
+		c.Writer.Write([]byte(fmt.Sprintf("data: %s\n\n", chunk)))
+		c.Writer.Flush()
+	})
+
+	c.Writer.Write([]byte(fmt.Sprintf("data: %s\n\n", fmt.Sprintf("{\"task_id\": \"%s\", \"status\": \"%s\"}", task.ID, task.Status))))
+	c.Writer.Flush()
 }

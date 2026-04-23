@@ -89,6 +89,98 @@ func (a *DesktopAgent) GetToolHistory() []tools.ToolCall {
 	return a.registry.GetHistory()
 }
 
+func (a *DesktopAgent) StreamTaskUpdate(taskID string, content string) {
+	task, ok := a.tasks[taskID]
+	if !ok {
+		return
+	}
+	task.Thinking += content
+	task.UpdatedAt = time.Now()
+}
+
+func (a *DesktopAgent) StreamCreateTask(intent string, confirm bool, onChunk func(string)) *Task {
+	task := NewTask(intent)
+	a.tasks[task.ID] = task
+	go a.streamExecuteTask(task.ID, confirm, onChunk)
+	return task
+}
+
+func (a *DesktopAgent) streamExecuteTask(taskID string, confirmed bool, onChunk func(string)) {
+	task := a.tasks[taskID]
+	if task == nil {
+		return
+	}
+
+	task.Status = TaskStatusRunning
+	task.UpdatedAt = time.Now()
+
+	onChunk("🔄 正在分析任务...\n")
+
+	response, err := a.llm.Chat(task.Intent, systemPrompt)
+	if err != nil {
+		task.Status = TaskStatusFailed
+		task.Error = fmt.Sprintf("LLM调用失败: %v", err)
+		task.UpdatedAt = time.Now()
+		onChunk(fmt.Sprintf("❌ 错误: %s\n", err))
+		return
+	}
+
+	onChunk("✅ 任务分析完成\n")
+
+	actions, err := parseActions(response)
+	if err != nil {
+		task.Status = TaskStatusFailed
+		task.Error = fmt.Sprintf("解析动作失败: %v", err)
+		task.UpdatedAt = time.Now()
+		onChunk(fmt.Sprintf("❌ 解析失败: %s\n", err))
+		return
+	}
+
+	task.Actions = actions
+	onChunk(fmt.Sprintf("📋 计划执行 %d 个动作\n\n", len(actions)))
+
+	needConfirm := false
+	for _, action := range actions {
+		if action.RiskScore >= a.config.Execution.ConfirmThreshold {
+			needConfirm = true
+			break
+		}
+	}
+
+	if needConfirm && !confirmed && !a.config.Execution.ConfirmDangerous {
+		task.Status = TaskStatusConfirming
+		task.UpdatedAt = time.Now()
+		onChunk("⚠️ 需要确认执行高风险操作\n")
+		return
+	}
+
+	task.Confirmed = true
+
+	for i, action := range actions {
+		task.CurrentAction = i
+		onChunk(fmt.Sprintf("🛠️ [%d/%d] 执行: %s\n", i+1, len(actions), action.Tool))
+
+		result := a.executeAction(action)
+		task.Result = append(task.Result, result)
+
+		if result.Success {
+			onChunk(fmt.Sprintf("  ✅ 成功\n"))
+		} else {
+			task.Status = TaskStatusFailed
+			task.Error = result.Error
+			task.UpdatedAt = time.Now()
+			onChunk(fmt.Sprintf("  ❌ 失败: %s\n", result.Error))
+			return
+		}
+
+		time.Sleep(500 * time.Millisecond)
+	}
+
+	task.Status = TaskStatusCompleted
+	task.UpdatedAt = time.Now()
+	onChunk("\n✨ 任务完成!")
+}
+
 func (a *DesktopAgent) ConfirmTask(id string) (*Task, error) {
 	task, ok := a.tasks[id]
 	if !ok {
