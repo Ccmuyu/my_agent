@@ -12,22 +12,18 @@ import (
 	"github.com/Ccmuyu/my_agent/internal/tools"
 )
 
-const systemPrompt = `你是一个智能助手。
+const systemPrompt = `你返回JSON。
 
-用户提问时，使用技能处理。
+规则：
+1. 直接返回可解析的JSON数组
+2. 不要有任何文字、前缀或解释
+3. city可以用空字符串表示自动定位
 
-技能格式（严格JSON）：
-[{"skill": "weather", "args": {"city": "北京"}}]
-[{"skill": "translate_text", "args": {"text": "hello", "target_lang": "zh"}}]
+示例输出：
+[{"skill": "weather", "args": {"city": ""}}]
+[{"skill": "weather", "args": {"city": "杭州"}}]
 
-示例：
-问：北京天气怎么样
-答：[{"skill": "weather", "args": {"city": "北京"}}]
-
-问：翻译hello到中文
-答：[{"skill": "translate_text", "args": {"text": "hello", "target_lang": "zh"}}]
-
-只输出JSON数组，禁止任何其他文字。`
+你只输出JSON数组。`
 
 type DesktopAgent struct {
 	llm     llm.Client
@@ -359,7 +355,8 @@ func parseActions(response string) ([]Action, string, error) {
 		if err := json.Unmarshal([]byte(match), &action); err == nil && (action.Skill != "" || action.Tool != "") {
 			if action.Skill == "weather" && action.Args != nil {
 				if city, ok := action.Args["city"].(string); ok {
-					if strings.Contains(city, "location") || city == "" {
+					// 修复各种非英文城市名或特殊值
+					if city == "" || strings.Contains(city, "当前") || strings.Contains(city, "location") || strings.Contains(city, "现在") || city == "北京" { // 北京可以查
 						action.Args["city"] = ""
 					}
 				}
