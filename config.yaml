@@ -1,8 +1,8 @@
 llm:
   provider: "openrouter"
-  api_key: "noop"  # no key needed for llm7.io
-  model: "deepseek-r1-0528"
-  base_url: "https://api.llm7.io/v1"
+  api_key: "noop"
+  model: "glm-4-flash"
+  base_url: "https://open.bigmodel.cn/api/paas/v4"
   temperature: 0.7
   max_tokens: 4096
 
@@ -28,7 +28,7 @@ server:
   port: 8000
 
 rag:
-  enabled: true
+  enabled: false
   vector_db:
     type: "qdrant"
     host: "localhost"

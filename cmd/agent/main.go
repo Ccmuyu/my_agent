@@ -19,6 +19,10 @@ var (
 	configPath = flag.String("config", "config.yaml", "config file path")
 	mode       = flag.String("mode", "cli", "run mode: cli or web")
 	port       = flag.Int("port", 8000, "web server port")
+	apiKey     = flag.String("api-key", "", "LLM API key (优先级: CLI > env > config)")
+	model      = flag.String("model", "", "LLM model")
+	provider   = flag.String("provider", "", "LLM provider")
+	baseURL    = flag.String("base-url", "", "LLM base URL")
 )
 
 func main() {
@@ -31,8 +35,8 @@ func main() {
 			Server: config.ServerConfig{Host: "0.0.0.0", Port: 8000},
 			LLM: config.LLMConfig{
 				Provider: "openrouter",
-				Model: "anthropic/claude-3.5-sonnet",
-				BaseURL: "https://openrouter.ai/api/v1",
+				Model: "glm-4-flash",
+				BaseURL: "https://open.bigmodel.cn/api/paas/v4",
 			},
 			Execution: config.ExecutionConfig{
 				MaxRetries: 3,
@@ -43,25 +47,18 @@ func main() {
 		}
 	}
 
-	// 初始化LLM客户端
-	var llmClient llm.Client
-	switch cfg.LLM.Provider {
-	case "openrouter":
-		llmClient = llm.NewOpenRouterClient(
-			cfg.LLM.APIKey,
-			cfg.LLM.Model,
-			cfg.LLM.BaseURL,
-			cfg.LLM.Temperature,
-			cfg.LLM.MaxTokens,
-		)
-	default:
-		log.Fatalf("unsupported LLM provider: %s", cfg.LLM.Provider)
-	}
+	resolveLLMConfig(cfg)
 
-	// 创建工具注册表
+	llmClient := llm.NewOpenRouterClient(
+		cfg.LLM.APIKey,
+		cfg.LLM.Model,
+		cfg.LLM.BaseURL,
+		cfg.LLM.Temperature,
+		cfg.LLM.MaxTokens,
+	)
+
 	registry := tools.CreateRegistry()
 
-	// 初始化RAG工具
 	if cfg.RAG.Enabled {
 		ctx := context.Background()
 		ragService, err := rag.NewRAGServiceFromConfig(ctx, &cfg.RAG)
@@ -73,7 +70,6 @@ func main() {
 		}
 	}
 
-	// 创建Agent
 	desktopAgent := agent.NewDesktopAgent(llmClient, registry, cfg)
 
 	if *mode == "cli" {
@@ -116,7 +112,6 @@ func runCLI(a *agent.DesktopAgent) {
 		fmt.Printf("任务创建成功: %s\n", task.ID)
 		fmt.Printf("状态: %s\n", task.Status)
 
-		// 等待执行完成
 		for {
 			t, _ := a.GetTask(task.ID)
 			if t.Status == agent.TaskStatusCompleted ||
@@ -148,4 +143,33 @@ func runCLI(a *agent.DesktopAgent) {
 
 	fmt.Println("Bye!")
 	os.Exit(0)
+}
+
+func resolveLLMConfig(cfg *config.Config) {
+	resolved := cfg.LLM
+
+	if *apiKey != "" {
+		resolved.APIKey = *apiKey
+	} else if k := os.Getenv("LLM_API_KEY"); k != "" {
+		resolved.APIKey = k
+	}
+
+	if *model != "" {
+		resolved.Model = *model
+	} else if m := os.Getenv("LLM_MODEL"); m != "" {
+		resolved.Model = m
+	}
+
+	if *baseURL != "" {
+		resolved.BaseURL = *baseURL
+	} else if u := os.Getenv("LLM_BASE_URL"); u != "" {
+		resolved.BaseURL = u
+	}
+
+	if *provider != "" {
+		resolved.Provider = *provider
+	}
+
+	cfg.LLM = resolved
+	log.Printf("LLM: %s - %s (%s)", cfg.LLM.Provider, cfg.LLM.Model, cfg.LLM.BaseURL)
 }

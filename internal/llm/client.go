@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"time"
 )
@@ -90,18 +91,23 @@ func (c *OpenRouterClient) Chat(message, systemPrompt string) (string, error) {
 	req.Header.Set("Authorization", "Bearer "+c.APIKey)
 	req.Header.Set("Content-Type", "application/json")
 
+	log.Printf("[LLM] URL: %s, Model: %s", c.BaseURL, c.Model)
+
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return "", err
 	}
 	defer resp.Body.Close()
 
+	bodyBytes, _ := io.ReadAll(resp.Body)
+	log.Printf("[LLM] Response Status: %d, Body: %s", resp.StatusCode, string(bodyBytes))
+
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("API returned status %d", resp.StatusCode)
+		return "", fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(bodyBytes))
 	}
 
 	var result OpenRouterResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := json.Unmarshal(bodyBytes, &result); err != nil {
 		return "", err
 	}
 
