@@ -1,0 +1,45 @@
+llm:
+  provider: "openrouter"
+  api_key: "noop"  # no key needed for llm7.io
+  model: "deepseek-r1-0528"
+  base_url: "https://api.llm7.io/v1"
+  temperature: 0.7
+  max_tokens: 4096
+
+perception:
+  screenshot_dir: "/tmp/desktop-agent/screenshots"
+  ocr_enabled: true
+
+execution:
+  max_retries: 3
+  retry_delay_ms: 1000
+  confirm_dangerous: true
+  confirm_threshold: 5
+
+browser:
+  headless: false
+  timeout_ms: 30000
+  viewport:
+    width: 1280
+    height: 720
+
+server:
+  host: "0.0.0.0"
+  port: 8000
+
+rag:
+  enabled: true
+  vector_db:
+    type: "qdrant"
+    host: "localhost"
+    port: 6333
+    collection: "desktop-agent-kb"
+  embedder:
+    provider: "ollama"
+    model: "nomic-embed-text"
+    base_url: "http://localhost:11434"
+  chunk:
+    size: 512
+    overlap: 50
+  search:
+    top_k: 5
