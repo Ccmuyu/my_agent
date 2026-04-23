@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"desktop-agent/internal/config"
+	"github.com/Ccmuyu/my_agent/internal/config"
 )
 
 type RAGService interface {

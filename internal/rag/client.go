@@ -8,7 +8,7 @@ import (
 	pb "github.com/qdrant/go-client/qdrant"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	"desktop-agent/internal/config"
+	"github.com/Ccmuyu/my_agent/internal/config"
 )
 
 type VectorStore interface {

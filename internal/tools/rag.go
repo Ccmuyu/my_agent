@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"desktop-agent/internal/rag"
+	"github.com/Ccmuyu/my_agent/internal/rag"
 )
 
 type RAGTool struct {

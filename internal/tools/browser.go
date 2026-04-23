@@ -92,7 +92,7 @@ func browserScroll(params map[string]any) (any, error) {
 }
 
 func browserScreenshot(params map[string]any) (any, error) {
-	dir := "/tmp/desktop-agent/screenshots"
+	dir := "/tmp/github.com/Ccmuyu/my_agent/screenshots"
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return nil, fmt.Errorf("create dir failed: %w", err)
 	}

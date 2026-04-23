@@ -1,16 +1,18 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log"
 	"os"
 
-	"desktop-agent/internal/agent"
-	"desktop-agent/internal/config"
-	"desktop-agent/internal/llm"
-	"desktop-agent/internal/tools"
-	"desktop-agent/internal/api"
+	"github.com/Ccmuyu/my_agent/internal/agent"
+	"github.com/Ccmuyu/my_agent/internal/config"
+	"github.com/Ccmuyu/my_agent/internal/llm"
+	"github.com/Ccmuyu/my_agent/internal/rag"
+	"github.com/Ccmuyu/my_agent/internal/tools"
+	"github.com/Ccmuyu/my_agent/internal/api"
 )
 
 var (
@@ -58,6 +60,18 @@ func main() {
 
 	// 创建工具注册表
 	registry := tools.CreateRegistry()
+
+	// 初始化RAG工具
+	if cfg.RAG.Enabled {
+		ctx := context.Background()
+		ragService, err := rag.NewRAGServiceFromConfig(ctx, &cfg.RAG)
+		if err != nil {
+			log.Printf("RAG service init failed: %v", err)
+		} else {
+			ragTool := tools.NewRAGTool(ragService, ctx)
+			ragTool.RegisterToRegistry(registry)
+		}
+	}
 
 	// 创建Agent
 	desktopAgent := agent.NewDesktopAgent(llmClient, registry, cfg)

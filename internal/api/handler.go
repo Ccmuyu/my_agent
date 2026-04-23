@@ -9,7 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"desktop-agent/internal/agent"
+	"github.com/Ccmuyu/my_agent/internal/agent"
 )
 
 var desktopAgent *agent.DesktopAgent
@@ -108,7 +108,7 @@ func listTools(c *gin.Context) {
 }
 
 func screenCapture(c *gin.Context) {
-	dir := "/tmp/desktop-agent/screenshots"
+	dir := "/tmp/github.com/Ccmuyu/my_agent/screenshots"
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -131,7 +131,7 @@ func screenCapture(c *gin.Context) {
 }
 
 func screenOCR(c *gin.Context) {
-	dir := "/tmp/desktop-agent/screenshots"
+	dir := "/tmp/github.com/Ccmuyu/my_agent/screenshots"
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

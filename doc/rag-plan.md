@@ -149,3 +149,5 @@ github.com/tmc/langchaingo v0.1.0  // embedding支持
 - [x] RAG工具类（tools/rag.go）
 - [x] 注册到ToolRegistry（rag.go）
 - [x] 4个工具：rag_search, rag_add, rag_list, rag_delete
+- [x] Agent集成（cmd/agent/main.go）
+- [x] 配置初始化与工具注册

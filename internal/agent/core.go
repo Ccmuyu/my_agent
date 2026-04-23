@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"desktop-agent/internal/config"
-	"desktop-agent/internal/llm"
-	"desktop-agent/internal/tools"
+	"github.com/Ccmuyu/my_agent/internal/config"
+	"github.com/Ccmuyu/my_agent/internal/llm"
+	"github.com/Ccmuyu/my_agent/internal/tools"
 )
 
 const systemPrompt = `你是一个任务规划器。用户会给出一个任务，你需要将其分解为可执行的原子动作序列。

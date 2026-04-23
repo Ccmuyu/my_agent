@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"desktop-agent/internal/config"
+	"github.com/Ccmuyu/my_agent/internal/config"
 )
 
 type DocumentProcessor struct {

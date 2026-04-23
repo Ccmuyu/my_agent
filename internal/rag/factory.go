@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"desktop-agent/internal/config"
+	"github.com/Ccmuyu/my_agent/internal/config"
 )
 
 func NewRAGServiceFromConfig(ctx context.Context, cfg *config.RAGConfig) (RAGService, error) {

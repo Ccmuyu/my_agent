@@ -3,7 +3,7 @@ package rag
 import (
 	"testing"
 
-	"desktop-agent/internal/config"
+	"github.com/Ccmuyu/my_agent/internal/config"
 )
 
 func TestEmbedderFactory(t *testing.T) {
