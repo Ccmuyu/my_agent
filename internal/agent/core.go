@@ -11,22 +11,22 @@ import (
 	"github.com/Ccmuyu/my_agent/internal/tools"
 )
 
-const systemPrompt = `你是一个智能助手，会根据用户问题调用相应的技能来处理。
+const systemPrompt = `你是一个智能助手。
 
-可用的技能：
-- weather: 查询天气
-- translate_text: 翻译文本
-- system_info: 查看系统信息
-- git_operations: Git操作
+用户提问时，使用技能处理。
 
-调用格式（严格JSON）：
+技能格式（严格JSON）：
 [{"skill": "weather", "args": {"city": "北京"}}]
-
-示例：
-[{"skill": "weather", "args": {}}]
 [{"skill": "translate_text", "args": {"text": "hello", "target_lang": "zh"}}]
 
-只输出JSON数组，禁止任何其他内容。`
+示例：
+问：北京天气怎么样
+答：[{"skill": "weather", "args": {"city": "北京"}}]
+
+问：翻译hello到中文
+答：[{"skill": "translate_text", "args": {"text": "hello", "target_lang": "zh"}}]
+
+只输出JSON数组，禁止任何其他文字。`
 
 type DesktopAgent struct {
 	llm     llm.Client
@@ -351,32 +351,44 @@ func parseActions(response string) ([]Action, string, error) {
 		}
 		jsonStr := response[:end+1]
 		if err := json.Unmarshal([]byte(jsonStr), &actions); err != nil {
-			return nil, response, nil
+			// 尝试逐行解析
+			lines := strings.Split(response, "\n")
+			for _, line := range lines {
+				line = strings.TrimSpace(line)
+				if line == "" || line == "[" || line == "]" || line == "," {
+					continue
+				}
+				var action Action
+				if err := json.Unmarshal([]byte(line), &action); err == nil && (action.Skill != "" || action.Tool != "") {
+					actions = append(actions, action)
+				}
+			}
 		}
 	} else if strings.HasPrefix(response, "{") {
 		var action Action
-		if err := json.Unmarshal([]byte(response), &action); err != nil {
-			return nil, response, nil
+		if err := json.Unmarshal([]byte(response), &action); err == nil && (action.Skill != "" || action.Tool != "") {
+			actions = []Action{action}
 		}
-		actions = []Action{action}
-	} else if strings.Contains(response, "\n") {
+	} else {
+		// 尝试从任意位置提取JSON
 		lines := strings.Split(response, "\n")
 		for _, line := range lines {
 			line = strings.TrimSpace(line)
-			if line == "" || line == "," {
+			if line == "" {
 				continue
 			}
+			// 去掉 "weather" 等工具名前缀
+			if strings.HasPrefix(line, "weather") || strings.HasPrefix(line, "translate") {
+				line = strings.TrimPrefix(line, "weather")
+				line = strings.TrimPrefix(line, "translate")
+				line = strings.TrimPrefix(line, "translate_text")
+				line = strings.TrimSpace(line)
+			}
 			var action Action
-			if err := json.Unmarshal([]byte(line), &action); err == nil && action.Tool != "" {
+			if err := json.Unmarshal([]byte(line), &action); err == nil && (action.Skill != "" || action.Tool != "") {
 				actions = append(actions, action)
 			}
 		}
-		if len(actions) > 0 {
-			return actions, "", nil
-		}
-		return nil, response, nil
-	} else {
-		return nil, response, nil
 	}
 
 	return actions, "", nil
