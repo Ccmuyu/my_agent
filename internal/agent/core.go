@@ -13,40 +13,21 @@ import (
 
 const systemPrompt = `你是一个智能助手。用户会给出一个任务或问题。
 
-处理规则：
-1. 如果用户的问题是简单知识类问题（如天气、时间、计算、常识等），直接回答，不需要调用工具
-2. 如果需要执行操作（文件操作、浏览器命令等），再分解为动作序列
-
 重要规则：
-1. 只使用下面列出的工具和参数名
-2. 参数值必须使用实际的文件路径/值，不能用占位符
-3. 如果需要列出文件，使用 file_list 工具，path 设为 "." 或实际路径
-4. 如果需要执行命令，使用 shell_run，command 设为实际命令如 "ls -la"
+1. 你必须使用工具来获取实时信息（天气等）
+2. 只返回JSON数组格式，不要返回单对象
+3. 城市参数：如果用户没有指定城市，city 参数设为空字符串（或不传），工具会自动通过IP定位
 
-可用的工具和参数：
-- file_read: 读取文件内容，参数: path (如: "config.yaml")
-- file_write: 写入文件内容，参数: path, content
-- file_list: 列出目录文件，参数: path (如: ".")
-- file_rename: 重命名/移动文件，参数: old, new
-- file_delete: 删除文件，参数: path
-- file_create_dir: 创建目录，参数: path
-- file_glob: 搜索文件，参数: pattern, dir
-- file_grep: 搜索文件内容，参数: pattern, path, recursive
-- browser_open: 打开URL，参数: url
-- browser_click: 点击页面元素，参数: selector
-- browser_input: 输入内容，参数: text, selector
-- browser_scroll: 滚动页面，参数: direction, amount
-- browser_screenshot: 网页截图
-- browser_close: 关闭浏览器
-- shell_run: 执行Shell命令，参数: command (如: "ls -la")
-- screen_capture: 屏幕截图
-- weather: 查询天气，参数: city
-- ocr_extract: OCR文字识别，参数: path
+可用的工具：
+- weather: 查询天气，参数: city (留空则自动定位)
+- file_read/file_write/file_list/file_delete/...
+- browser_open/browser_click/...
 
-请将任务分解为JSON数组格式的动作序列。每个动作需要包含：
-- tool: 工具名
-- params: 参数字典
-- risk_score: 风险评分(0-10)
+输出格式：JSON数组，每个元素包含 tool, params, risk_score
+
+示例输出：
+[{"tool": "weather", "params": {}, "risk_score": 0}]
+[{"tool": "file_read", "params": {"path": "config.yaml"}, "risk_score": 1}]
 
 只输出JSON数组，不要其他内容。`
 
@@ -339,18 +320,26 @@ func (a *DesktopAgent) executeAction(action Action) ActionResult {
 }
 
 func parseActions(response string) ([]Action, string, error) {
-	// 尝试提取JSON数组
-	start := strings.Index(response, "[")
-	end := strings.LastIndex(response, "]")
-	if start == -1 || end == -1 || end <= start {
-		// 没有JSON数组，可能是纯文本回答
-		return nil, response, nil
-	}
+	response = strings.TrimSpace(response)
 
-	jsonStr := response[start : end+1]
 	var actions []Action
-	if err := json.Unmarshal([]byte(jsonStr), &actions); err != nil {
-		// JSON解析失败，可能是纯文本
+
+	if strings.HasPrefix(response, "[") {
+		end := strings.LastIndex(response, "]")
+		if end == -1 {
+			return nil, response, nil
+		}
+		jsonStr := response[:end+1]
+		if err := json.Unmarshal([]byte(jsonStr), &actions); err != nil {
+			return nil, response, nil
+		}
+	} else if strings.HasPrefix(response, "{") {
+		var action Action
+		if err := json.Unmarshal([]byte(response), &action); err != nil {
+			return nil, response, nil
+		}
+		actions = []Action{action}
+	} else {
 		return nil, response, nil
 	}
 
