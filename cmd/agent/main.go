@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"github.com/Ccmuyu/my_agent/internal/agent"
 	"github.com/Ccmuyu/my_agent/internal/config"
@@ -109,32 +110,35 @@ func runCLI(a *agent.DesktopAgent) {
 		}
 
 		task := a.CreateTask(input, false)
-		fmt.Printf("任务创建成功: %s\n", task.ID)
-		fmt.Printf("状态: %s\n", task.Status)
+		fmt.Printf("👤 User: %s\n", input)
+		fmt.Println("🔄 Thinking...")
 
 		for {
 			t, _ := a.GetTask(task.ID)
-			if t.Status == agent.TaskStatusCompleted ||
-				t.Status == agent.TaskStatusFailed ||
-				t.Status == agent.TaskStatusConfirming {
-				break
+			if t.Status == agent.TaskStatusRunning || t.Status == agent.TaskStatusPending {
+				time.Sleep(200 * time.Millisecond)
+				continue
 			}
+			if t.Status == agent.TaskStatusConfirming {
+				t.Status = agent.TaskStatusRunning
+				t.Confirmed = true
+			}
+			break
 		}
 
 		t, _ := a.GetTask(task.ID)
-		fmt.Printf("最终状态: %s\n", t.Status)
 
 		if t.Error != "" {
-			fmt.Printf("错误: %s\n", t.Error)
+			fmt.Printf("❌ 错误: %s\n", t.Error)
+			continue
 		}
 
 		if len(t.Result) > 0 {
-			fmt.Println("执行结果:")
 			for _, r := range t.Result {
 				if r.Success {
-					fmt.Printf("  ✓ %v\n", r.Output)
+					fmt.Printf("✅ Assistant: %v\n", r.Output)
 				} else {
-					fmt.Printf("  ✗ %s\n", r.Error)
+					fmt.Printf("❌ 错误: %s\n", r.Error)
 				}
 			}
 		}
