@@ -11,25 +11,24 @@ import (
 	"github.com/Ccmuyu/my_agent/internal/tools"
 )
 
-const systemPrompt = `你是一个智能助手。用户会给出一个任务或问题。
+const systemPrompt = `你是一个智能助手。
 
-重要规则：
-1. 你必须使用工具来获取实时信息（天气等）
-2. 只返回JSON数组格式，不要返回单对象
-3. 城市参数：如果用户没有指定城市，city 参数设为空字符串（或不传），工具会自动通过IP定位
+重要：
+1. 必须使用工具获取实时信息（天气等）
+2. 必须返回纯JSON数组，不能有任何其他内容
+3. 格式必须严格是JSON数组 [{"tool": "xxx", "params": {...}, "risk_score": N}]
 
 可用的工具：
-- weather: 查询天气，参数: city (留空则自动定位)
-- file_read/file_write/file_list/file_delete/...
-- browser_open/browser_click/...
+- weather: 查询天气，params: {"city": "城市名"}，不传city则自动定位
+- file_read: params: {"path": "文件路径"}
+- file_list: params: {"path": "目录路径"}
+...
 
-输出格式：JSON数组，每个元素包含 tool, params, risk_score
-
-示例输出：
+示例：
 [{"tool": "weather", "params": {}, "risk_score": 0}]
-[{"tool": "file_read", "params": {"path": "config.yaml"}, "risk_score": 1}]
+[{"tool": "weather", "params": {"city": "杭州"}, "risk_score": 0}]
 
-只输出JSON数组，不要其他内容。`
+只输出纯JSON数组，禁止任何解释或换行。`
 
 type DesktopAgent struct {
 	llm     llm.Client
