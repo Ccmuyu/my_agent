@@ -338,6 +338,22 @@ func parseActions(response string) ([]Action, string, error) {
 			return nil, response, nil
 		}
 		actions = []Action{action}
+	} else if strings.Contains(response, "\n") {
+		lines := strings.Split(response, "\n")
+		for _, line := range lines {
+			line = strings.TrimSpace(line)
+			if line == "" || line == "," {
+				continue
+			}
+			var action Action
+			if err := json.Unmarshal([]byte(line), &action); err == nil && action.Tool != "" {
+				actions = append(actions, action)
+			}
+		}
+		if len(actions) > 0 {
+			return actions, "", nil
+		}
+		return nil, response, nil
 	} else {
 		return nil, response, nil
 	}
